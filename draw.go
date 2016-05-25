@@ -837,7 +837,7 @@ func (c *DrawContext) Text(x float64, y float64, layout *TextLayout) {
 	C.uiDrawText(c.c, C.double(x), C.double(y), layout.l)
 }
 
-// Pixmap is used to feed pixmaps into Image. The pixmap must be 32
+// Pixmap is used to feed pixmaps into DrawContext.Image. The pixmap must be 32
 // bit per pixel ARGB image in host byte order with pre-multiplied
 // alpha channel.
 type Pixmap interface {
@@ -847,6 +847,7 @@ type Pixmap interface {
 	GetPixelData() unsafe.Pointer
 }
 
+// Image draw the given Pixmap onto c at the given point.
 func (c *DrawContext) Image(x, y float64, pm Pixmap) {
 	w := pm.GetWidth()
 	h := pm.GetHeight()
