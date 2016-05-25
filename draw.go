@@ -2,6 +2,10 @@
 
 package ui
 
+import (
+	"unsafe"
+)
+
 // #include <stdlib.h>
 // #include "ui.h"
 // // TODO figure this one out
@@ -831,4 +835,22 @@ func (l *TextLayout) Extents() (width float64, height float64) {
 // (TODO bounding box or typographical extent?)
 func (c *DrawContext) Text(x float64, y float64, layout *TextLayout) {
 	C.uiDrawText(c.c, C.double(x), C.double(y), layout.l)
+}
+
+// Pixmap is used to feed pixmaps into Image. The pixmap must be 32
+// bit per pixel ARGB image in host byte order with pre-multiplied
+// alpha channel.
+type Pixmap interface {
+	GetWidth() int
+	GetHeight() int
+	GetRowstrideBytes() int
+	GetPixelData() unsafe.Pointer
+}
+
+func (c *DrawContext) Image(x, y float64, pm Pixmap) {
+	w := pm.GetWidth()
+	h := pm.GetHeight()
+	rs := pm.GetRowstrideBytes()
+	px := pm.GetPixelData()
+	C.uiDrawPixmap(c.c, C.double(x), C.double(y), C.int(w), C.int(h), C.int(rs), px)
 }
