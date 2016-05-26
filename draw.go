@@ -285,7 +285,7 @@ const (
 	Solid BrushType = iota
 	LinearGradient
 	RadialGradient
-	Image		// presently unimplemented
+//	Image		// presently unimplemented
 )
 
 // TODO
@@ -367,8 +367,8 @@ func (b *Brush) toC() *C.uiDrawBrush {
 				C.double(s.B),
 				C.double(s.A))
 		}
-	case Image:
-		panic("unimplemented")
+//	case Image:
+//		panic("unimplemented")
 	default:
 		panic("invalid brush type in Brush.toC()")
 	}
@@ -847,6 +847,32 @@ type Pixmap interface {
 	GetPixelData() unsafe.Pointer
 }
 
+type Image struct {
+	i *C.uiImage
+}
+
+func NewImage(w, h int) *Image {
+	return &Image{ C.uiNewImage(C.int(w), C.int(h)) }
+}
+
+func (img *Image) Free() {
+	C.uiFreeImage(img.i)
+	img.i = nil
+}
+
+func (img *Image) LoadPixmap32Raw(x, y int, pm Pixmap) {
+	w := pm.GetWidth()
+	h := pm.GetHeight()
+	rs := pm.GetRowstrideBytes()
+	px := pm.GetPixelData()
+	C.uiImageLoadPixmap32Raw(img.i, C.int(x), C.int(y), C.int(w), C.int(h), C.int(rs), C.uiImagePreferedPixmap32Format(), px)	
+}
+
+func (c *DrawContext) Image(x, y float64, im *Image) {
+	C.uiDrawImage(c.c, C.double(x), C.double(y), im.i)
+}
+
+/*
 // Image draw the given Pixmap onto c at the given point.
 func (c *DrawContext) Image(x, y float64, pm Pixmap) {
 	w := pm.GetWidth()
@@ -855,3 +881,4 @@ func (c *DrawContext) Image(x, y float64, pm Pixmap) {
 	px := pm.GetPixelData()
 	C.uiDrawPixmap(c.c, C.double(x), C.double(y), C.int(w), C.int(h), C.int(rs), px)
 }
+*/
