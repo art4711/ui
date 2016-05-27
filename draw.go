@@ -4,6 +4,8 @@ package ui
 
 import (
 	"unsafe"
+	"image"
+	"image/color"
 )
 
 // #include <stdlib.h>
@@ -844,22 +846,19 @@ func (c *DrawContext) Text(x float64, y float64, layout *TextLayout) {
 	C.uiDrawText(c.c, C.double(x), C.double(y), layout.l)
 }
 
-// Pixmap is used to feed pixmaps into DrawContext.Image. The pixmap must be 32
-// bit per pixel ARGB image in host byte order with pre-multiplied
-// alpha channel.
-type Pixmap interface {
-	GetWidth() int
-	GetHeight() int
-	GetRowstrideBytes() int
-	GetPixelData() unsafe.Pointer
-}
-
 type Image struct {
 	i *C.uiImage
+	imgData C.uiImageData
+	px []byte
 }
 
 func NewImage(w, h int) *Image {
-	return &Image{ C.uiNewImage(C.int(w), C.int(h)) }
+	im := &Image{}
+	im.i = C.uiNewImage(C.int(w), C.int(h))
+	C.uiImageGetData(im.i, &im.imgData)
+	sz := int(im.imgData.rowstride*im.imgData.height)
+	im.px = ((*[1<<40]byte)(im.imgData.data))[:sz:sz]
+	return im
 }
 
 func (img *Image) Free() {
@@ -867,26 +866,37 @@ func (img *Image) Free() {
 	img.i = nil
 }
 
-func (img *Image) LoadPixmap32Raw(x, y int, pm Pixmap) {
+func (img *Image) Bounds() image.Rectangle {
+	return image.Rect(0, 0, int(img.imgData.width), int(img.imgData.height))
+}
+
+func (img *Image) SetRGBA(x, y int, c color.RGBA) {
+	o := y * int(img.imgData.rowstride) + x * 4
+	img.px[o + 0] = c.A
+	img.px[o + 1] = c.R
+	img.px[o + 2] = c.G
+	img.px[o + 3] = c.B
+}
+
+func (img *Image) Rowstride() int {
+	return int(img.imgData.rowstride)
+}
+
+func (img *Image) PixelsPtr() unsafe.Pointer {
+	return img.imgData.data
+}
+
+func (img *Image) LoadPixmap32Raw(x, y int, pm image.Image) {
+/*
 	w := pm.GetWidth()
 	h := pm.GetHeight()
-	rs := pm.GetRowstrideBytes()
-	px := pm.GetPixelData()
+	rs := pm.GetRowstride()
+	px := pm.GetPixelsPtr()
 
 	C.uiImageLoadPixmap32Raw(img.i, C.int(x), C.int(y), C.int(w), C.int(h), C.int(rs), C.pixmapfmt(3, 2, 1, 0, 1, 1, 0), px)
+*/
 }
 
 func (c *DrawContext) Image(x, y float64, im *Image) {
 	C.uiDrawImage(c.c, C.double(x), C.double(y), im.i)
 }
-
-/*
-// Image draw the given Pixmap onto c at the given point.
-func (c *DrawContext) Image(x, y float64, pm Pixmap) {
-	w := pm.GetWidth()
-	h := pm.GetHeight()
-	rs := pm.GetRowstrideBytes()
-	px := pm.GetPixelData()
-	C.uiDrawPixmap(c.c, C.double(x), C.double(y), C.int(w), C.int(h), C.int(rs), px)
-}
-*/
