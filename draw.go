@@ -127,6 +127,13 @@ import (
 // 	free(a);
 // 	free(b);
 // }
+// static uiPixmap32Format pixmapfmt(int a, int r, int g, int b, int alpha, int alphapre, int zerobottom)
+// {
+//	return uiPixmap32FormatOffsets(a, r, g, b) |
+//		(alpha ? uiPixmap32FormatHasAlpha : 0) |
+//		(alphapre ? uiPixmap32FormatAlphaPremultiplied : 0) |
+//		(zerobottom ? uiPixmap32FormatZeroRowBottom : 0);
+// }
 import "C"
 
 // BUG(andlabs): Ideally, all the drawing APIs should be in another package ui/draw (they all have the "uiDraw" prefix in C to achieve a similar goal of avoiding confusing programmers via namespace pollution); managing the linkage of the libui shared library itself across multiple packages is likely going to be a pain, though. (Custom controls implemented using libui won't have this issue, as they *should* only need libui present when linking the shared object, not when linking the Go wrapper. I'm not sure; I'd have to find out first.)
@@ -865,7 +872,8 @@ func (img *Image) LoadPixmap32Raw(x, y int, pm Pixmap) {
 	h := pm.GetHeight()
 	rs := pm.GetRowstrideBytes()
 	px := pm.GetPixelData()
-	C.uiImageLoadPixmap32Raw(img.i, C.int(x), C.int(y), C.int(w), C.int(h), C.int(rs), C.uiImagePreferedPixmap32Format(), px)	
+
+	C.uiImageLoadPixmap32Raw(img.i, C.int(x), C.int(y), C.int(w), C.int(h), C.int(rs), C.pixmapfmt(3, 2, 1, 0, 1, 1, 0), px)
 }
 
 func (c *DrawContext) Image(x, y float64, im *Image) {
