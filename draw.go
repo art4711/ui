@@ -3,7 +3,6 @@
 package ui
 
 import (
-	"unsafe"
 	"image"
 	"image/color"
 )
@@ -129,13 +128,10 @@ import (
 // 	free(a);
 // 	free(b);
 // }
-// static uiPixmap32Format pixmapfmt(int a, int r, int g, int b, int alpha, int alphapre, int zerobottom)
-// {
-//	return uiPixmap32FormatOffsets(a, r, g, b) |
-//		(alpha ? uiPixmap32FormatHasAlpha : 0) |
-//		(alphapre ? uiPixmap32FormatAlphaPremultiplied : 0) |
-//		(zerobottom ? uiPixmap32FormatZeroRowBottom : 0);
-// }
+// static int imgFmtAO(uiPixmap32Format fmt) { return uiPixmap32FormatOffsetA(fmt); }
+// static int imgFmtRO(uiPixmap32Format fmt) { return uiPixmap32FormatOffsetR(fmt); }
+// static int imgFmtGO(uiPixmap32Format fmt) { return uiPixmap32FormatOffsetG(fmt); }
+// static int imgFmtBO(uiPixmap32Format fmt) { return uiPixmap32FormatOffsetB(fmt); }
 import "C"
 
 // BUG(andlabs): Ideally, all the drawing APIs should be in another package ui/draw (they all have the "uiDraw" prefix in C to achieve a similar goal of avoiding confusing programmers via namespace pollution); managing the linkage of the libui shared library itself across multiple packages is likely going to be a pain, though. (Custom controls implemented using libui won't have this issue, as they *should* only need libui present when linking the shared object, not when linking the Go wrapper. I'm not sure; I'd have to find out first.)
@@ -846,10 +842,15 @@ func (c *DrawContext) Text(x float64, y float64, layout *TextLayout) {
 	C.uiDrawText(c.c, C.double(x), C.double(y), layout.l)
 }
 
+// Image represents an image that we can draw with DrawContext.Image()
+// It also implements the Image interface from package "image/draw".
 type Image struct {
 	i *C.uiImage
+
 	imgData C.uiImageData
 	px []byte
+
+	oa, or, og, ob int
 }
 
 func NewImage(w, h int) *Image {
@@ -858,6 +859,15 @@ func NewImage(w, h int) *Image {
 	C.uiImageGetData(im.i, &im.imgData)
 	sz := int(im.imgData.rowstride*im.imgData.height)
 	im.px = ((*[1<<40]byte)(im.imgData.data))[:sz:sz]
+
+	// It would be nice to tell the complier here that
+	// the values are [0,3] so that we could do a
+	// bit more efficient slice bounds checking.
+	im.oa = int(C.imgFmtAO(im.imgData.fmt))
+	im.or = int(C.imgFmtRO(im.imgData.fmt))
+	im.og = int(C.imgFmtGO(im.imgData.fmt))
+	im.ob = int(C.imgFmtBO(im.imgData.fmt))
+
 	return im
 }
 
@@ -866,35 +876,30 @@ func (img *Image) Free() {
 	img.i = nil
 }
 
+// implements image/draw.Image
 func (img *Image) Bounds() image.Rectangle {
 	return image.Rect(0, 0, int(img.imgData.width), int(img.imgData.height))
 }
 
-func (img *Image) SetRGBA(x, y int, c color.RGBA) {
+// implements image/draw.Image
+func (img *Image) Set(x, y int, c color.Color) {
 	o := y * int(img.imgData.rowstride) + x * 4
-	img.px[o + 0] = c.A
-	img.px[o + 1] = c.R
-	img.px[o + 2] = c.G
-	img.px[o + 3] = c.B
+	r, g, b, a := c.RGBA()
+	img.px[o + img.oa] = uint8(a >> 8)
+	img.px[o + img.or] = uint8(r >> 8)
+	img.px[o + img.og] = uint8(g >> 8)
+	img.px[o + img.ob] = uint8(b >> 8)
 }
 
-func (img *Image) Rowstride() int {
-	return int(img.imgData.rowstride)
+// implements image/draw.Image
+func (img *Image) At(x, y int) color.Color {
+	o := y * int(img.imgData.rowstride) + x * 4
+	return color.RGBA{ A: img.px[o + img.oa], R: img.px[o + img.or], G: img.px[o + img.og], B: img.px[o + img.ob] }
 }
 
-func (img *Image) PixelsPtr() unsafe.Pointer {
-	return img.imgData.data
-}
-
-func (img *Image) LoadPixmap32Raw(x, y int, pm image.Image) {
-/*
-	w := pm.GetWidth()
-	h := pm.GetHeight()
-	rs := pm.GetRowstride()
-	px := pm.GetPixelsPtr()
-
-	C.uiImageLoadPixmap32Raw(img.i, C.int(x), C.int(y), C.int(w), C.int(h), C.int(rs), C.pixmapfmt(3, 2, 1, 0, 1, 1, 0), px)
-*/
+// implements image/draw.Image
+func (img *Image) ColorModel() color.Model {
+	return color.RGBAModel
 }
 
 func (c *DrawContext) Image(x, y float64, im *Image) {
